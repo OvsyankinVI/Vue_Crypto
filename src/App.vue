@@ -330,6 +330,7 @@ export default {
   watch: {
     selectedTicker() {
       this.graph = [] 
+      this.$nextTick().then(this.calculateMaxGraphElements())
     },
     paginatedTickers() {
       if (this.page > 1 && this.paginatedTickers.length === 0) {
