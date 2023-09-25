@@ -17,6 +17,7 @@
               <input
                 v-model="ticker"
                 @keydown.enter="addPost"
+                @input="clearErrors"
                 type="text"
                 name="wallet"
                 id="wallet"
@@ -24,7 +25,7 @@
                 placeholder="Например DOGE"
               />
             </div>
-            <div class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap">
+            <div class="flex bg-white p-1 rounded-md shadow-md flex-wrap">
               <span
                v-for="example in exampels"
                :key="example"
@@ -34,6 +35,7 @@
                 {{ example.title }}
               </span>
             </div>
+            <div v-if="pos" class="text-sm text-red-600">Такая криптовалюта уже добавлена</div>
             <div v-if="error" class="text-sm text-red-600">Это поле не должно быть пустым</div>
           </div>
         </div>
@@ -58,17 +60,25 @@
           </svg>
           Добавить
         </button>
+        <hr class="w-full border-t border-gray-600 my-4"/>
+        Фильтр: 
+        <input
+         v-model="filter"
+         class="border-0"
+         @input="page = 1"
+        >
+        <br/>
       </section>
 
       <template v-if="tickers.length">
         <hr class="w-full border-t border-gray-600 my-4"/>
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-            v-for="tick in tickers"
-            :key="tick"
+            v-for="tick in paginatedTickers"
+            :key="tick.name"
             @click="select(tick)"
             :class="{
-              'border-4': sel === tick
+              'border-4': selectedTicker === tick
             }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
@@ -77,12 +87,12 @@
                 {{ tick.title }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ tick.price }}
+                {{ tick.price }}$
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
             <button
-            @click.stop="delPost(tick)"
+              @click.stop="delPost(tick); selectedTicker = null"
               class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-gray-200 hover:opacity-20 transition-all focus:outline-none"
             >
               <svg
@@ -100,15 +110,45 @@
             </button>
           </div>
         </dl>
+        <br>
+        <div class="pagin" style="display: flex; justify-content: center; align-items: center">
+          <div style="width: 110px">
+            <button
+              @click="this.page -= 1"
+              v-show="page > 1"
+              class="mr-5 my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+            Назад
+            </button>
+          </div>
+          
+          <p class="text-center"
+            v-if="tickers.length > tickersOnPage"
+          >
+            Стр. {{ page }}
+          </p>
+          <div style="width: 110px">
+            <button
+              @click="this.page += 1"
+              v-show="hasNextPage"
+              class="ml-5 my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+            Вперед
+            </button>
+          </div>
+          
+        </div>
+        
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
-      <section class="relative"  v-if="sel">
+
+      <section class="relative"  v-if="selectedTicker">
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-          {{ sel.title }} - USD
+          {{ selectedTicker.title }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div
-            v-for="(bar, idx) in normolizeGraph()"
+            v-for="(bar, idx) in normolizedGraph"
             :key="idx"
             :style="{ height: `${bar}%`}"
             class="bg-purple-800 border w-10"
@@ -117,7 +157,7 @@
         <button
           type="button"
           class="absolute top-0 right-0"
-          @click="sel = null"
+          @click="selectedTicker = null, grapg = []"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -147,12 +187,22 @@
 </template>
 
 <script>
+import { loadTicker } from './api'; 
+
 export default {
   name: 'App',
   data() {
     return {
       ticker: '',
+      filter: '',
+
       tickers: [],
+      selectedTicker: null,
+
+      graph: [],
+      
+      page: 1,
+
       exampels: [
         {title: 'BTC', price: '-'}, 
         {title: 'TON', price: '-'},
@@ -161,29 +211,91 @@ export default {
     ] ,
       error: false,
       loading: true, 
-      sel: null,
-      graph: []
+      pos: false, 
+      tickersOnPage: 6
+    }
+  },
+  created() {
+    const windowData = Object.fromEntries(new URL(window.location).searchParams.entries())
+    if (windowData.filter) {
+      this.filter = windowData.filter
+    }
+
+    if (windowData.page) {
+      this.page = windowData.page
+    }
+
+    const tickersData = localStorage.getItem('crypot-list')
+    if (tickersData) {
+      this.tickers = JSON.parse(tickersData)
+      this.tickers.forEach(ticker => {
+        this.subscripePrice(ticker.title)
+      })
+    }
+  },
+  computed: {
+    startIndex() {
+      return (this.page - 1) * this.tickersOnPage
+    },
+    endIndex() {
+      return this.page * this.tickersOnPage
+    },
+    filteredTickers() {
+        return this.tickers.filter(ticker => ticker.title.includes(this.filter))
+    }, 
+    paginatedTickers() {
+      return this.filteredTickers.slice(this.startIndex, this.endIndex)
+    },
+    hasNextPage() {
+      return this.filteredTickers.length > this.endIndex
+    },
+    normolizedGraph() {
+      const maxV = Math.max(...this.graph)
+      const minV = Math.min(...this.graph)
+       if (minV === maxV) {
+        return this.graph.map(() => 50)
+      }  
+      return this.graph.map(
+        price => 5 + ((price - minV) * 95) / (maxV - minV)
+      )
+    },
+    pageStateOptions() {
+      return {
+        filter: this.filter,
+        page: this.page
+      }
     }
   },
   methods: {
     addPost() {
-      let newPost = {title: this.ticker, price: '-'}
-      if (newPost.title != '') {
-        this.tickers.push(newPost)
-        setInterval(async() => {
-          const f = await fetch(`https://min-api.cryptocompare.com/data/price?fsym=${newPost.title}&tsyms=USD&api_key=3c0427aa0facb70690450b2d29c7f5556618df5ac244aa55ba104f6b2e84cd08`)
-          const data = await f.json()
-          this.tickers.find(t => t.title === newPost.title).price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2)
-          if (this.sel?.title === newPost.title) {
-            this.graph.push(data.USD)
-          }
-        }, 5000)
-        this.ticker = ''
-        this.error = false
-      } else {
+      const newPost = {title: this.ticker, price: '-'}
+      if (this.ticker === '') {
         this.error = true
+      } else {
+        for (let i = 0; i < this.tickers.length; i++) {
+        if (this.tickers[i].title.toLowerCase() === this.ticker.toLowerCase()) {
+          this.pos = true
+          } 
+        }
+        if (this.pos === false) {
+          this.tickers.push(newPost)
+          this.filter = ''
+          localStorage.setItem('crypot-list', JSON.stringify(this.tickers))
+          this.subscripePrice(newPost.title)
+          this.ticker = ''
+        }  
       }
-      
+    },
+    subscripePrice(tickerName) {
+      setInterval(async() => {
+        const exchangeData = await loadTicker(tickerName)
+            if (this.tickers.find(c => c.title === tickerName) != undefined) {
+              this.tickers.find(c => c.title === tickerName).price = exchangeData.USD /* > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2) */
+            }
+            if (this.selectedTicker?.title === tickerName) {
+              this.graph.push(exchangeData.USD)
+            }
+          }, 5000)
     },
     delPost(post) {
       this.tickers = this.tickers.filter(c => c != post)
@@ -192,25 +304,46 @@ export default {
       this.ticker = post.title
       this.addPost()
     },
-    normolizeGraph() {
-      const maxV = Math.max(...this.graph)
-      const minV = Math.min(...this.graph)
-      return this.graph.map(
-        price => 5 + ((price - minV) * 95) / (maxV - minV)
-      )
-    },
     select(t) {
-      this.sel = t
+      this.selectedTicker = t
+    },
+    clearErrors() {
+      this.pos = false  
+      this.error = false
+    }
+  },
+  watch: {
+    selectedTicker() {
       this.graph = [] 
+    },
+    paginatedTickers() {
+      if (this.page > 1 && this.paginatedTickers.length === 0) {
+        this.page -= 1
+      }
+    },
+    ticker() {
+      this.ticker = this.ticker.toUpperCase()
+    },
+    tickers() {
+      localStorage.setItem('crypot-list', JSON.stringify(this.tickers))
+    },
+    filter() {
+      this.filter = this.filter.toUpperCase()
+      this.page = 1
+    },
+    pageStateOptions(value) {
+      window.history.pushState(
+        null,
+        document.title,
+        `${window.location.pathname}?filter=${value.filter}&?page=${value.page}`
+      )
     }
   },
   mounted() {
     setTimeout(() =>
       {
         this.loading = false
-      }, 100) 
+      }, 500) 
   }
 }
 </script>
-
-<style src="./app.css"></style>
