@@ -78,7 +78,8 @@
             :key="tick.name"
             @click="select(tick)"
             :class="{
-              'border-4': selectedTicker === tick
+              'border-4': selectedTicker === tick,
+              'bg-red-100' : tick.price === undefined
             }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
@@ -146,7 +147,10 @@
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
           {{ selectedTicker.title }} - USD
         </h3>
-        <div class="flex items-end border-gray-600 border-b border-l h-64">
+        <div 
+          class="flex items-end border-gray-600 border-b border-l h-64"
+          ref="graph"
+        >
           <div
             v-for="(bar, idx) in normolizedGraph"
             :key="idx"
@@ -202,6 +206,7 @@ export default {
       graph: [],
       
       page: 1,
+      maxGraphElements: 1,
 
       exampels: [
         {title: 'BTC', price: '-'}, 
@@ -267,6 +272,13 @@ export default {
     }
   },
   methods: {
+    calculateMaxGraphElements() {
+      if (!this.$refs.graph) {
+        return
+      }
+      this.maxGraphElements = this.$refs.graph.clientWidth / 38
+    },
+
     addPost() {
       const newPost = {title: this.ticker, price: '-'}
       if (this.ticker === '') {
@@ -295,7 +307,10 @@ export default {
             if (this.selectedTicker?.title === tickerName) {
               this.graph.push(exchangeData.USD)
             }
-          }, 5000)
+            while (this.graph.length > this.maxGraphElements) {
+              this.graph.shift()
+            }
+          }, 1000)
     },
     delPost(post) {
       this.tickers = this.tickers.filter(c => c != post)
@@ -340,10 +355,16 @@ export default {
     }
   },
   mounted() {
+    window.addEventListener('resize', this.calculateMaxGraphElements)
+
     setTimeout(() =>
       {
         this.loading = false
       }, 500) 
+  },
+
+  beforeUnmount() {
+    window.removeEventListener('resize', this.calculateMaxGraphElements)
   }
 }
 </script>
