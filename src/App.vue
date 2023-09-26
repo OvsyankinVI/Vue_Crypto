@@ -8,58 +8,7 @@
     </div>
     <div class="container">
       <section>
-        <div class="flex">
-          <div class="max-w-xs">
-            <label for="wallet" class="block text-sm font-medium text-gray-700"
-              >Тикер</label
-            >
-            <div class="mt-1 relative rounded-md shadow-md">
-              <input
-                v-model="ticker"
-                @keydown.enter="addPost"
-                @input="clearErrors"
-                type="text"
-                name="wallet"
-                id="wallet"
-                class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
-                placeholder="Например DOGE"
-              />
-            </div>
-            <div class="flex bg-white p-1 rounded-md shadow-md flex-wrap">
-              <span
-               v-for="example in exampels"
-               :key="example"
-               @click="addNewExamplePost(example)"
-               class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                {{ example.title }}
-              </span>
-            </div>
-            <div v-if="pos" class="text-sm text-red-600">Такая криптовалюта уже добавлена</div>
-            <div v-if="error" class="text-sm text-red-600">Это поле не должно быть пустым</div>
-          </div>
-        </div>
-        <button
-        @click="addPost"
-        
-          type="button"
-          class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-        >
-          <!-- Heroicon name: solid/mail -->
-          <svg
-            class="-ml-0.5 mr-2 h-6 w-6"
-            xmlns="http://www.w3.org/2000/svg"
-            width="30"
-            height="30"
-            viewBox="0 0 24 24"
-            fill="#ffffff"
-          >
-            <path
-              d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4V7zm-1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"
-            ></path>
-          </svg>
-          Добавить
-        </button>
+        <add-tickers @add-ticker="addPost" :tickers="this.tickers"/>
         <hr class="w-full border-t border-gray-600 my-4"/>
         Фильтр: 
         <input
@@ -79,9 +28,10 @@
             @click="select(tick)"
             :class="{
               'border-4': selectedTicker === tick,
-              'bg-red-100' : tick.price === undefined
+              'bg-red-100' : tick.price === undefined,
+              'bg-white' : tick.price != undefined
             }"
-            class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
+            class=" overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
               <dt class="text-sm font-medium text-gray-500 truncate">
@@ -192,12 +142,15 @@
 
 <script>
 import { loadTicker } from './api'; 
+import AddTickers from './components/AddTickers.vue'
 
 export default {
   name: 'App',
+  components: {
+    AddTickers
+  },
   data() {
     return {
-      ticker: '',
       filter: '',
 
       tickers: [],
@@ -208,15 +161,7 @@ export default {
       page: 1,
       maxGraphElements: 1,
 
-      exampels: [
-        {title: 'BTC', price: '-'}, 
-        {title: 'TON', price: '-'},
-        {title: 'BCH', price: '-'}, 
-        {title: 'CHD', price: '-'}
-    ] ,
-      error: false,
       loading: true, 
-      pos: false, 
       tickersOnPage: 6
     }
   },
@@ -279,25 +224,14 @@ export default {
       this.maxGraphElements = this.$refs.graph.clientWidth / 38
     },
 
-    addPost() {
-      const newPost = {title: this.ticker, price: '-'}
-      if (this.ticker === '') {
-        this.error = true
-      } else {
-        for (let i = 0; i < this.tickers.length; i++) {
-        if (this.tickers[i].title.toLowerCase() === this.ticker.toLowerCase()) {
-          this.pos = true
-          } 
-        }
-        if (this.pos === false) {
-          this.tickers.push(newPost)
-          this.filter = ''
-          localStorage.setItem('crypot-list', JSON.stringify(this.tickers))
-          this.subscripePrice(newPost.title)
-          this.ticker = ''
-        }  
-      }
-    },
+    addPost(ticker) {
+      const newPost = { title: ticker, price: "-" };
+          this.tickers.push(newPost);
+          this.filter = "";
+          localStorage.setItem("crypot-list", JSON.stringify(this.tickers));
+          this.subscripePrice(newPost.title);
+        },
+
     subscripePrice(tickerName) {
       setInterval(async() => {
         const exchangeData = await loadTicker(tickerName)
@@ -310,22 +244,14 @@ export default {
             while (this.graph.length > this.maxGraphElements) {
               this.graph.shift()
             }
-          }, 1000)
+          }, 5000)
     },
     delPost(post) {
       this.tickers = this.tickers.filter(c => c != post)
     },
-    addNewExamplePost(post) {
-      this.ticker = post.title
-      this.addPost()
-    },
     select(t) {
       this.selectedTicker = t
     },
-    clearErrors() {
-      this.pos = false  
-      this.error = false
-    }
   },
   watch: {
     selectedTicker() {
@@ -336,9 +262,6 @@ export default {
       if (this.page > 1 && this.paginatedTickers.length === 0) {
         this.page -= 1
       }
-    },
-    ticker() {
-      this.ticker = this.ticker.toUpperCase()
     },
     tickers() {
       localStorage.setItem('crypot-list', JSON.stringify(this.tickers))
