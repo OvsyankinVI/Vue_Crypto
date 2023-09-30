@@ -1,15 +1,9 @@
 <template>
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
-    <div v-if="loading" class="fixed w-100 h-100 opacity-80 bg-purple-800 inset-0 z-50 flex items-center justify-center">
-      <svg class="animate-spin -ml-1 mr-3 h-12 w-12 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-    </div>
+    <add-pre-load/>
     <div class="container">
       <section>
         <add-tickers @add-ticker="addPost" :tickers="this.tickers"/>
-        <hr class="w-full border-t border-gray-600 my-4"/>
         Фильтр: 
         <input
          v-model="filter"
@@ -20,80 +14,13 @@
       </section>
 
       <template v-if="tickers.length">
-        <hr class="w-full border-t border-gray-600 my-4"/>
-        <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <div
-            v-for="tick in paginatedTickers"
-            :key="tick.name"
-            @click="select(tick)"
-            :class="{
-              'border-4': selectedTicker === tick,
-              'bg-red-100' : tick.price === undefined,
-              'bg-white' : tick.price != undefined
-            }"
-            class=" overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
-          >
-            <div class="px-4 py-5 sm:p-6 text-center">
-              <dt class="text-sm font-medium text-gray-500 truncate">
-                {{ tick.title }} - USD
-              </dt>
-              <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ tick.price }}$
-              </dd>
-            </div>
-            <div class="w-full border-t border-gray-200"></div>
-            <button
-              @click.stop="delPost(tick); selectedTicker = null"
-              class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-gray-200 hover:opacity-20 transition-all focus:outline-none"
-            >
-              <svg
-                class="h-5 w-5"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="#718096"
-                aria-hidden="true"
-              >
-                <path
-                  fill-rule="evenodd"
-                  d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                  clip-rule="evenodd"
-                ></path></svg>Удалить
-            </button>
-          </div>
-        </dl>
-        <br>
-        <div class="pagin" style="display: flex; justify-content: center; align-items: center">
-          <div style="width: 110px">
-            <button
-              @click="this.page -= 1"
-              v-show="page > 1"
-              class="mr-5 my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            >
-            Назад
-            </button>
-          </div>
-          
-          <p class="text-center"
-            v-if="tickers.length > tickersOnPage"
-          >
-            Стр. {{ page }}
-          </p>
-          <div style="width: 110px">
-            <button
-              @click="this.page += 1"
-              v-show="hasNextPage"
-              class="ml-5 my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            >
-            Вперед
-            </button>
-          </div>
-          
-        </div>
+        <add-list @delPost="delPost" @selectPost='select' :paginatedTickers="paginatedTickers" :selectedTicker="selectedTicker"/> 
+        <add-paganation @add-plus="PlusPage" @add-minus="MinusPage" :page="this.page" :tickers="this.tickers" :tickersOnPage="this.tickersOnPage" :hasNextPage="hasNextPage"/>
         
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
 
-      <add-graph @max-graf-elements="maxGraph" @del-graph="delGraphNow" :graph="this.graph" :selectedTicker="this.selectedTicker"/>
+      <add-graph @max-graf-elements="maxGraph" @del-graph="delGraphNow" :hasNextPage="this.hasNextPage" :graph="this.graph" :selectedTicker="this.selectedTicker"/>
     </div>
   </div>
 </template>
@@ -102,12 +29,18 @@
 import { loadTicker } from './api'; 
 import AddTickers from './components/AddTickers.vue'
 import AddGraph from './components/AddGraph.vue'
+import AddList from './components/AddList.vue'
+import AddPreLoad from './components/AddPreLoad.vue'
+import AddPaganation from './components/AddPaganation.vue'
 
 export default {
   name: 'App',
   components: {
     AddTickers,
-    AddGraph
+    AddGraph,
+    AddList,
+    AddPreLoad,
+    AddPaganation
   },
   data() {
     return {
@@ -121,7 +54,6 @@ export default {
       page: 1,
       maxGraphElements: 1,
 
-      loading: true, 
       tickersOnPage: 6
     }
   },
@@ -174,6 +106,7 @@ export default {
           this.filter = "";
           localStorage.setItem("crypot-list", JSON.stringify(this.tickers));
           this.subscripePrice(newPost.title);
+          console.log(this.page);
         },
 
     subscripePrice(tickerName) {
@@ -188,22 +121,31 @@ export default {
             while (this.graph.length > this.maxGraphElements) {
               this.graph.shift()
             }
-          }, 1000)
+          }, 5000)
     },
     delPost(post) {
       this.tickers = this.tickers.filter(c => c != post)
+      this.selectedTicker = null;
     },
     maxGraph(maxGraphElem) {
       this.maxGraphElements = maxGraphElem
-      console.log(maxGraphElem);
     },
     delGraphNow(delGraph) {
       this.selectedTicker = delGraph
       this.graph = []
     },
-    select(t) {
-      this.selectedTicker = t
+    select(tick) {
+      if (this.selectedTicker != tick) {
+        this.selectedTicker = tick
+        this.graph = []
+      }
     },
+    PlusPage() {
+      this.page += 1
+    },
+    MinusPage() {
+      this.page -= 1
+    }
   },
   watch: {
     paginatedTickers() {
@@ -226,11 +168,6 @@ export default {
       )
     }
   },
-  mounted() {
-    setTimeout(() =>
-      {
-        this.loading = false
-      }, 500) 
-  },
+
 }
 </script>
